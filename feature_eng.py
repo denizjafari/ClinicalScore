@@ -51,6 +51,9 @@ class FeatureLandmarks(Enum):
 #     RMouthCMouthL = [48, 57]  # d_3{diff} Left side // changed 51 for 57
 
 # These enums define which landmarks to use for each metric type
+
+
+
 class StrokeFeatureLandmarks(FeatureLandmarks):
     MouthHeight = [51, 57]  # O_{Max} and O_{Min}
     MouthWidth = [48, 54]  # W_{Max} and W_{Min}
@@ -78,6 +81,25 @@ class ALSFeatureLandmarks(FeatureLandmarks):
     NoseMouthR = [30, 48]  # Nose to right corner of the mouth
     NoseMouthL = [30, 54]  # Nose to left corner of the mouth
 
+class FeatureLandmarks(FeatureLandmarks):
+    MouthHeight = [51, 57]  # O_{Max} and O_{Min}
+    MouthWidth = [48, 54]  # W_{Max} and W_{Min}
+    MouthAreaLeft = [54, 51, 57]  # A_Mean and delta_A and A_Absdiff
+    MouthAreaRight = [48, 51, 57]  # A_Mean and delta_A and A_Absdiff
+    Corners = [48, 54, 30]  # r_{LCRC}
+    NoseLipR = [30, 48] # Nose to right corner of the mouth
+    NoseLipL = [30, 54] # Nose to left corner of the mouth
+    NoseJawR = [30, 48] # Nose to right jaw
+    NoseJawL = [30, 54] # Nose to left jaw
+    LEyebrowCanthus = [23, 42]  # d_0{diff} Left side
+    REyebrowCanthus = [20, 39]  # d_0{diff} Right side
+    LCanthusMouthC = [42, 54]  # d_1{diff} Left side
+    RCanthusMouthC = [39, 48]  # d_1{diff} Right side
+    LCanthusMouthU = [42, 51]  # d_2{diff} Right side       P.S. There's a
+    RCanthusMouthU = [39, 51]  # d_2{diff} Left side        typo in the paper
+    LMouthCMouthU = [54, 51]  # d_3{diff} Right side
+    RMouthCMouthU = [48, 51]  # d_3{diff} Left side
+    LowerLip = [30, 57]  # LLpath sum and vLL_Max and vLL_Min
 
 # We have some options about what column names may be depending on if the data
 # is 3D or 2D
@@ -88,7 +110,6 @@ default_columns = [
     "landmark_{}.1",
     "landmark_{}.2"
 ]
-
 
 class Metrics:
     """
@@ -460,7 +481,6 @@ class Metrics:
         if feature_type == FeatureType.POS:
             return self.get_active_feature(data), rest_data
 
-
 class StrokeMetrics(Metrics):
    
 
@@ -575,6 +595,122 @@ class StrokeMetrics(Metrics):
         # metrics.loc[0]["D_4"] = self.get_distance_metrics(StrokeFeatureLandmarks.LMouthCMouthL, StrokeFeatureLandmarks.RMouthCMouthL, metric_type=metric_type)
 
         return metrics
+
+class ClinicalMetrics(Metrics):
+
+
+    def get_length_metrics(self, position) -> Tuple[float, float, float, float, float, float]:
+        """
+        Calculates the Delta (max - min) and mean of a given distance between two points normalized
+        by its value at rest.
+        Also max and min velocity
+        :return: Tuple of (Delta Distance, Mean Distance, Max Velcoity, Min Velocity)
+        """
+        feature, rest_feature = self.eval_feature(position, FeatureType.DIST)
+        normalized = self.normalize_feature(feature, rest_feature, NormOption.RestAvg)
+        velocity = self.three_point_difference(normalized)
+
+        acceleration = self.three_point_difference(velocity)
+
+        return normalized.max(), normalized.min(), velocity.max(), velocity.min(), acceleration.max(), acceleration.min()
+
+    def get_area_metrics(self, positionLeft, postionRight, metric_type='CCC') -> float:
+        """
+        Calculates a metric between two areas
+        The areas are normalized by their average values during rest
+        metric_type
+        CCC -> Concordance Correlation Coefficient
+        dist -> average absolute difference
+        pearson -> pearson correlation
+
+        :return: metric value
+        """
+        left_feature, left_rest = self.eval_feature(positionLeft, FeatureType.AREA)
+        right_feature, right_rest = self.eval_feature(postionRight, FeatureType.AREA)
+
+        if metric_type == 'CCC':
+            concordance = self.concordance_correlation_coefficient(left_feature, right_feature)
+            return concordance
+
+        elif metric_type == 'dist':
+            # difference = np.abs(left_feature_normalized - right_feature_normalized)
+            # return difference.mean()
+            feature = np.abs(left_feature - right_feature)
+            feature_rest = np.abs(left_rest - right_rest)
+            feature_normalized = self.normalize_feature(feature, feature_rest, NormOption.RestAvg)
+            return feature_normalized.mean()
+
+        elif metric_type == 'pearson':
+            pearson_corr = np.corrcoef(left_feature.reshape(1,-1), right_feature.reshape(1,-1))
+            return pearson_corr[1,0]
+
+    def get_distance_metrics(self, positionLeft, postionRight, metric_type='CCC') -> float:
+        """
+        Calculates a metric between two distances
+        The areas are normalized by their average values during rest
+        metric_type
+        CCC -> Concordance Correlation Coefficient
+        dist -> average absolute difference
+        pearson -> pearson correlation
+
+        :return: metric value
+        """
+        left_feature, left_rest = self.eval_feature(positionLeft, FeatureType.DIST)
+        right_feature, right_rest = self.eval_feature(postionRight, FeatureType.DIST)
+
+        if metric_type == 'CCC':
+            concordance = self.concordance_correlation_coefficient(left_feature, right_feature)
+            return concordance
+
+        elif metric_type == 'dist':
+            # difference = np.abs(left_feature_normalized - right_feature_normalized)
+            # return difference.mean()
+            feature = np.abs(left_feature-right_feature)
+            feature_rest = np.abs(left_rest-right_rest)
+            feature_normalized = self.normalize_feature(feature, feature_rest, NormOption.RestAvg)
+            return feature_normalized.mean()
+
+        elif metric_type == 'pearson':
+            pearson_corr = np.corrcoef(left_feature.reshape(1, -1), right_feature.reshape(1, -1))
+            return pearson_corr[1, 0]
+
+    def compute_metrics(self, active_frames: Optional[Iterable[int]] = None) -> pd.DataFrame:
+        """
+        Computes all the metrics and returns a dataframe containing them
+        :return:
+        """
+        metric_type = 'dist'
+        if active_frames is not None:
+            self._active_frames = active_frames
+        all_metrics = ["O_MAX", "O_MIN", "O_MAX_VEL", "O_MIN_VEL","O_MAX_ACL","O_MIN_ACL",
+                       "W_MAX", "W_MIN", "W_MAX_VEL", "W_MIN_VEL", "W_MAX_ACL","W_MIN_ACL",
+                       "A_MOUTH",
+                       "R_LCRC",
+                       "D_0",
+                       "D_1",
+                       "D_2",
+                       "D_3"]
+                       #"D_4"]
+        metrics = pd.DataFrame(columns=all_metrics)
+        metrics.loc[0] = 0
+        metrics.loc[0][["O_MAX", "O_MIN", "O_MAX_VEL", "O_MIN_VEL",         "O_MAX_ACL","O_MIN_ACL"]]=self.get_length_metrics(StrokeFeatureLandmarks.MouthHeight)
+        metrics.loc[0][["W_MAX", "W_MIN", "W_MAX_VEL", "W_MIN_VEL", "W_MAX_ACL","W_MIN_ACL"]] = self.get_length_metrics(StrokeFeatureLandmarks.MouthWidth)
+        metrics.loc[0]["A_MOUTH"] = self.get_area_metrics(StrokeFeatureLandmarks.LeftMouth,
+                                                          StrokeFeatureLandmarks.RightMouth, metric_type=metric_type)
+        metrics.loc[0]["R_LCRC"] = self.get_distance_metrics(StrokeFeatureLandmarks.NoseMouthL,
+                                                             StrokeFeatureLandmarks.NoseMouthR, metric_type='CCC')
+        metrics.loc[0]["D_0"] = self.get_distance_metrics(StrokeFeatureLandmarks.LEyebrowCanthus,
+                                                          StrokeFeatureLandmarks.REyebrowCanthus, metric_type=metric_type)
+        metrics.loc[0]["D_1"] = self.get_distance_metrics(StrokeFeatureLandmarks.LCanthusMouthC,
+                                                          StrokeFeatureLandmarks.RCanthusMouthC, metric_type=metric_type)
+        metrics.loc[0]["D_2"] = self.get_distance_metrics(StrokeFeatureLandmarks.LCanthusMouthU,
+                                                          StrokeFeatureLandmarks.RCanthusMouthU, metric_type=metric_type)
+        metrics.loc[0]["D_3"] = self.get_distance_metrics(StrokeFeatureLandmarks.LMouthCMouthU,
+                                                          StrokeFeatureLandmarks.RMouthCMouthU, metric_type=metric_type)
+        # metrics.loc[0]["D_4"] = self.get_distance_metrics(StrokeFeatureLandmarks.LMouthCMouthL, StrokeFeatureLandmarks.RMouthCMouthL, metric_type=metric_type)
+
+        return metrics
+
 
 class ALSMetrics(Metrics):
     def get_LL_path_sum(self, position) -> float:
