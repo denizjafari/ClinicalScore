@@ -89,8 +89,8 @@ class FeatureLandmarks(FeatureLandmarks):
     Corners = [48, 54, 30]  # r_{LCRC}
     NoseLipR = [30, 48] # Nose to right corner of the mouth
     NoseLipL = [30, 54] # Nose to left corner of the mouth
-    NoseJawR = [30, 48] # Nose to right jaw
-    NoseJawL = [30, 54] # Nose to left jaw
+    NoseJawR = [30, 6] # Nose to right jaw
+    NoseJawL = [30, 10] # Nose to left jaw
     LEyebrowCanthus = [23, 42]  # d_0{diff} Left side
     REyebrowCanthus = [20, 39]  # d_0{diff} Right side
     LCanthusMouthC = [42, 54]  # d_1{diff} Left side
@@ -100,6 +100,7 @@ class FeatureLandmarks(FeatureLandmarks):
     LMouthCMouthU = [54, 51]  # d_3{diff} Right side
     RMouthCMouthU = [48, 51]  # d_3{diff} Left side
     LowerLip = [30, 57]  # LLpath sum and vLL_Max and vLL_Min
+
 
 # We have some options about what column names may be depending on if the data
 # is 3D or 2D
@@ -598,6 +599,16 @@ class StrokeMetrics(Metrics):
 
 class ClinicalMetrics(Metrics):
 
+    def get_LL_path_sum(self, position) -> float:
+        """
+        Computes the path length of the lower lip
+        :return: Distance of path
+        """
+        feature, rest_feature = self.eval_feature(position, FeatureType.DIST)
+        normalized = self.normalize_feature(feature, rest_feature, NormOption.RestAvg)
+        feature_dist = np.sum(normalized)
+        return feature_dist  # TODO: Question: This varies with the length of the active period. Should it be normalized by length of video?
+
 
     def get_length_metrics(self, position) -> Tuple[float, float, float, float, float, float]:
         """
@@ -674,6 +685,17 @@ class ClinicalMetrics(Metrics):
             pearson_corr = np.corrcoef(left_feature.reshape(1, -1), right_feature.reshape(1, -1))
             return pearson_corr[1, 0]
 
+    def get_eccentricity_metrics(self) -> Tuple[float, float]:
+        """
+        Computes metrics related to the eccentricity of the mouth ellipse
+        :return: A tuple of (Mean Eccentricity, Range of Eccentricity)
+        """
+        feature_width, feature_width_rest = self.eval_feature(FeatureLandmarks.MouthWidth, FeatureType.DIST)
+        feature_opening, feature_opening_rest = self.eval_feature(FeatureLandmarks.MouthHeight, FeatureType.DIST)
+        eccentricities = self.compute_eccentricity(feature_width, feature_opening)
+        return eccentricities.mean(), np.ptp(eccentricities)
+
+
     def compute_metrics(self, active_frames: Optional[Iterable[int]] = None) -> pd.DataFrame:
         """
         Computes all the metrics and returns a dataframe containing them
@@ -684,31 +706,38 @@ class ClinicalMetrics(Metrics):
             self._active_frames = active_frames
         all_metrics = ["O_MAX", "O_MIN", "O_MAX_VEL", "O_MIN_VEL","O_MAX_ACL","O_MIN_ACL",
                        "W_MAX", "W_MIN", "W_MAX_VEL", "W_MIN_VEL", "W_MAX_ACL","W_MIN_ACL",
+                       "LR_MAX", "LR_MIN", "LR_MAX_VEL", "LR_MIN_VEL","LR_MAX_ACL","LR_MIN_ACL",
+                       "LL_MAX", "LL_MIN", "LL_MAX_VEL", "LL_MIN_VEL","LL_MAX_ACL","LL_MIN_ACL",
+                       "JR_MAX", "JR_MIN", "JR_MAX_VEL", "JR_MIN_VEL","JR_MAX_ACL","JR_MIN_ACL",
+                       "JL_MAX", "JL_MIN", "JL_MAX_VEL", "JL_MIN_VEL","JL_MAX_ACL","JL_MIN_ACL",
+                       "LL_PATH", "JR_PATH", "JL_PATH",
                        "A_MOUTH",
                        "R_LCRC",
                        "D_0",
                        "D_1",
                        "D_2",
-                       "D_3"]
+                       "D_3",
+                       "E_MEAN", "E_RANGE"]
                        #"D_4"]
         metrics = pd.DataFrame(columns=all_metrics)
         metrics.loc[0] = 0
-        metrics.loc[0][["O_MAX", "O_MIN", "O_MAX_VEL", "O_MIN_VEL",         "O_MAX_ACL","O_MIN_ACL"]]=self.get_length_metrics(StrokeFeatureLandmarks.MouthHeight)
-        metrics.loc[0][["W_MAX", "W_MIN", "W_MAX_VEL", "W_MIN_VEL", "W_MAX_ACL","W_MIN_ACL"]] = self.get_length_metrics(StrokeFeatureLandmarks.MouthWidth)
-        metrics.loc[0]["A_MOUTH"] = self.get_area_metrics(StrokeFeatureLandmarks.LeftMouth,
-                                                          StrokeFeatureLandmarks.RightMouth, metric_type=metric_type)
-        metrics.loc[0]["R_LCRC"] = self.get_distance_metrics(StrokeFeatureLandmarks.NoseMouthL,
-                                                             StrokeFeatureLandmarks.NoseMouthR, metric_type='CCC')
-        metrics.loc[0]["D_0"] = self.get_distance_metrics(StrokeFeatureLandmarks.LEyebrowCanthus,
-                                                          StrokeFeatureLandmarks.REyebrowCanthus, metric_type=metric_type)
-        metrics.loc[0]["D_1"] = self.get_distance_metrics(StrokeFeatureLandmarks.LCanthusMouthC,
-                                                          StrokeFeatureLandmarks.RCanthusMouthC, metric_type=metric_type)
-        metrics.loc[0]["D_2"] = self.get_distance_metrics(StrokeFeatureLandmarks.LCanthusMouthU,
-                                                          StrokeFeatureLandmarks.RCanthusMouthU, metric_type=metric_type)
-        metrics.loc[0]["D_3"] = self.get_distance_metrics(StrokeFeatureLandmarks.LMouthCMouthU,
-                                                          StrokeFeatureLandmarks.RMouthCMouthU, metric_type=metric_type)
+        metrics.loc[0][["O_MAX", "O_MIN", "O_MAX_VEL", "O_MIN_VEL", "O_MAX_ACL","O_MIN_ACL"]]=self.get_length_metrics(FeatureLandmarks.MouthHeight)
+        metrics.loc[0][["W_MAX", "W_MIN", "W_MAX_VEL", "W_MIN_VEL", "W_MAX_ACL","W_MIN_ACL"]] = self.get_length_metrics(FeatureLandmarks.MouthWidth)
+        metrics.loc[0][["LR_MAX", "LR_MIN", "LR_MAX_VEL", "LR_MIN_VEL","LR_MAX_ACL","LR_MIN_ACL"]] = self.get_length_metrics(FeatureLandmarks.NoseLipR)
+        metrics.loc[0][["LL_MAX", "LL_MIN", "LL_MAX_VEL", "LL_MIN_VEL","LL_MAX_ACL","LL_MIN_ACL"]] = self.get_length_metrics(FeatureLandmarks.NoseLipL)
+        metrics.loc[0][["JR_MAX", "JR_MIN", "JR_MAX_VEL", "JR_MIN_VEL","JR_MAX_ACL","JR_MIN_ACL"]] = self.get_length_metrics(FeatureLandmarks.NoseJawR)
+        metrics.loc[0][["JL_MAX", "JL_MIN", "JL_MAX_VEL", "JL_MIN_VEL","JL_MAX_ACL","JL_MIN_ACL"]] = self.get_length_metrics(FeatureLandmarks.NoseJawL)
+        metrics.loc[0]["LL_PATH"] = self.get_LL_path_sum(FeatureLandmarks.LowerLip)
+        metrics.loc[0]["JR_PATH"] = self.get_LL_path_sum(FeatureLandmarks.NoseJawR)
+        metrics.loc[0]["JL_PATH"] = self.get_LL_path_sum(FeatureLandmarks.NoseJawL)
+        metrics.loc[0]["A_MOUTH"] = self.get_area_metrics(FeatureLandmarks.MouthAreaLeft,FeatureLandmarks.MouthAreaRight, metric_type=metric_type)
+        metrics.loc[0]["R_LCRC"] = self.get_distance_metrics(FeatureLandmarks.NoseLipL, FeatureLandmarks.NoseLipR, metric_type='CCC')
+        metrics.loc[0]["D_0"] = self.get_distance_metrics(FeatureLandmarks.LEyebrowCanthus, FeatureLandmarks.REyebrowCanthus, metric_type=metric_type)
+        metrics.loc[0]["D_1"] = self.get_distance_metrics(FeatureLandmarks.LCanthusMouthC, FeatureLandmarks.RCanthusMouthC, metric_type=metric_type)
+        metrics.loc[0]["D_2"] = self.get_distance_metrics(FeatureLandmarks.LCanthusMouthU, FeatureLandmarks.RCanthusMouthU, metric_type=metric_type)
+        metrics.loc[0]["D_3"] = self.get_distance_metrics(FeatureLandmarks.LMouthCMouthU,FeatureLandmarks.RMouthCMouthU, metric_type=metric_type)
         # metrics.loc[0]["D_4"] = self.get_distance_metrics(StrokeFeatureLandmarks.LMouthCMouthL, StrokeFeatureLandmarks.RMouthCMouthL, metric_type=metric_type)
-
+        metrics.loc[0][["E_MEAN", "E_RANGE"]] = self.get_eccentricity_metrics()
         return metrics
 
 
