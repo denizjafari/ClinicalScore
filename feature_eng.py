@@ -610,7 +610,7 @@ class ClinicalMetrics(Metrics):
         return feature_dist  # TODO: Question: This varies with the length of the active period. Should it be normalized by length of video?
 
 
-    def get_length_metrics(self, position) -> Tuple[float, float, float, float, float, float]:
+    def get_length_metrics(self, position) -> Tuple[float, float, float, float, float, float, float, float, float]:
         """
         Calculates the Delta (max - min) and mean of a given distance between two points normalized
         by its value at rest.
@@ -623,9 +623,9 @@ class ClinicalMetrics(Metrics):
 
         acceleration = self.three_point_difference(velocity)
 
-        return normalized.max(), normalized.min(), velocity.max(), velocity.min(), acceleration.max(), acceleration.min()
+        return normalized.max(), normalized.min(),normalized.mean(), velocity.max(), velocity.min(), velocity.mean(), acceleration.max(), acceleration.min(), acceleration.mean()
 
-    def get_area_metrics(self, positionLeft, postionRight, metric_type='CCC') -> float:
+    def get_area_metrics(self, positionLeft, postionRight, metric_type='CCC') -> Tuple[float, float, float, float]:
         """
         Calculates a metric between two areas
         The areas are normalized by their average values during rest
@@ -639,21 +639,25 @@ class ClinicalMetrics(Metrics):
         left_feature, left_rest = self.eval_feature(positionLeft, FeatureType.AREA)
         right_feature, right_rest = self.eval_feature(postionRight, FeatureType.AREA)
 
+        area_diff = np.abs(left_feature - right_feature)
+        area_rest_diff = np.abs(left_rest - right_rest)
+        area_diff_normalized = self.normalize_feature(area_diff, area_rest_diff, NormOption.RestAvg)
+
+        area_total = left_feature + right_feature
+        area_total_rest = left_rest + right_rest
+        area_total_normalized = self.normalize_feature(area_total, area_total_rest, NormOption.RestAvg)
+
+
         if metric_type == 'CCC':
             concordance = self.concordance_correlation_coefficient(left_feature, right_feature)
-            return concordance
-
-        elif metric_type == 'dist':
-            # difference = np.abs(left_feature_normalized - right_feature_normalized)
-            # return difference.mean()
-            feature = np.abs(left_feature - right_feature)
-            feature_rest = np.abs(left_rest - right_rest)
-            feature_normalized = self.normalize_feature(feature, feature_rest, NormOption.RestAvg)
-            return feature_normalized.mean()
+            correlation_areas = concordance
 
         elif metric_type == 'pearson':
             pearson_corr = np.corrcoef(left_feature.reshape(1,-1), right_feature.reshape(1,-1))
-            return pearson_corr[1,0]
+            correlation_areas = pearson_corr[1,0]
+
+
+        return area_total_normalized.mean(), np.ptp(area_total_normalized), area_diff_normalized.mean(), correlation_areas
 
     def get_distance_metrics(self, positionLeft, postionRight, metric_type='CCC') -> float:
         """
@@ -704,12 +708,12 @@ class ClinicalMetrics(Metrics):
         metric_type = 'dist'
         if active_frames is not None:
             self._active_frames = active_frames
-        all_metrics = ["O_MAX", "O_MIN", "O_MAX_VEL", "O_MIN_VEL","O_MAX_ACL","O_MIN_ACL",
-                       "W_MAX", "W_MIN", "W_MAX_VEL", "W_MIN_VEL", "W_MAX_ACL","W_MIN_ACL",
-                       "LR_MAX", "LR_MIN", "LR_MAX_VEL", "LR_MIN_VEL","LR_MAX_ACL","LR_MIN_ACL",
-                       "LL_MAX", "LL_MIN", "LL_MAX_VEL", "LL_MIN_VEL","LL_MAX_ACL","LL_MIN_ACL",
-                       "JR_MAX", "JR_MIN", "JR_MAX_VEL", "JR_MIN_VEL","JR_MAX_ACL","JR_MIN_ACL",
-                       "JL_MAX", "JL_MIN", "JL_MAX_VEL", "JL_MIN_VEL","JL_MAX_ACL","JL_MIN_ACL",
+        all_metrics = ["O_MAX", "O_MIN", "O_Mean", "O_MAX_VEL", "O_MIN_VEL", "O_Mean_VEL", "O_MAX_ACL", "O_MIN_ACL", "O_Mean_ACL",
+                       "W_MAX", "W_MIN", "W_Mean", "W_MAX_VEL", "W_MIN_VEL","W_Mean_VEL", "W_MAX_ACL", "W_MIN_ACL", "W_Mean_ACL",
+                       "LR_MAX", "LR_MIN", "LR_Mean", "LR_MAX_VEL", "LR_MIN_VEL", "LR_Mean_VEL", "LR_MAX_ACL","LR_MIN_ACL", "LR_Mean_ACL",
+                       "LL_MAX", "LL_MIN", "LL_Mean", "LL_MAX_VEL", "LL_MIN_VEL", "LL_Mean_VEL", "LL_MAX_ACL","LL_MIN_ACL", "LL_Mean_ACL",
+                       "JR_MAX", "JR_MIN", "JR_Mean", "JR_MAX_VEL", "JR_MIN_VEL", "JR_Mean_VEL", "JR_MAX_ACL", "JR_MIN_ACL", "JR_Mean_ACL",
+                       "JL_MAX", "JL_MIN", "JL_Mean", "JL_MAX_VEL", "JL_MIN_VEL", "JL_Mean_VEL", "JL_MAX_ACL", "JL_MIN_ACL", "JL_Mean_ACL",
                        "LL_PATH", "JR_PATH", "JL_PATH",
                        "A_MOUTH",
                        "R_LCRC",
@@ -721,16 +725,16 @@ class ClinicalMetrics(Metrics):
                        #"D_4"]
         metrics = pd.DataFrame(columns=all_metrics)
         metrics.loc[0] = 0
-        metrics.loc[0][["O_MAX", "O_MIN", "O_MAX_VEL", "O_MIN_VEL", "O_MAX_ACL","O_MIN_ACL"]]=self.get_length_metrics(FeatureLandmarks.MouthHeight)
-        metrics.loc[0][["W_MAX", "W_MIN", "W_MAX_VEL", "W_MIN_VEL", "W_MAX_ACL","W_MIN_ACL"]] = self.get_length_metrics(FeatureLandmarks.MouthWidth)
-        metrics.loc[0][["LR_MAX", "LR_MIN", "LR_MAX_VEL", "LR_MIN_VEL","LR_MAX_ACL","LR_MIN_ACL"]] = self.get_length_metrics(FeatureLandmarks.NoseLipR)
-        metrics.loc[0][["LL_MAX", "LL_MIN", "LL_MAX_VEL", "LL_MIN_VEL","LL_MAX_ACL","LL_MIN_ACL"]] = self.get_length_metrics(FeatureLandmarks.NoseLipL)
-        metrics.loc[0][["JR_MAX", "JR_MIN", "JR_MAX_VEL", "JR_MIN_VEL","JR_MAX_ACL","JR_MIN_ACL"]] = self.get_length_metrics(FeatureLandmarks.NoseJawR)
-        metrics.loc[0][["JL_MAX", "JL_MIN", "JL_MAX_VEL", "JL_MIN_VEL","JL_MAX_ACL","JL_MIN_ACL"]] = self.get_length_metrics(FeatureLandmarks.NoseJawL)
+        metrics.loc[0][["O_MAX", "O_MIN", "O_Mean", "O_MAX_VEL", "O_MIN_VEL", "O_Mean_VEL", "O_MAX_ACL", "O_MIN_ACL", "O_Mean_ACL"]]=self.get_length_metrics(FeatureLandmarks.MouthHeight)
+        metrics.loc[0][["W_MAX", "W_MIN", "W_Mean", "W_MAX_VEL", "W_MIN_VEL","W_Mean_VEL", "W_MAX_ACL", "W_MIN_ACL", "W_Mean_ACL"]] = self.get_length_metrics(FeatureLandmarks.MouthWidth)
+        metrics.loc[0][["LR_MAX", "LR_MIN", "LR_Mean", "LR_MAX_VEL", "LR_MIN_VEL", "LR_Mean_VEL", "LR_MAX_ACL","LR_MIN_ACL", "LR_Mean_ACL"]] = self.get_length_metrics(FeatureLandmarks.NoseLipR)
+        metrics.loc[0][["LL_MAX", "LL_MIN", "LL_Mean", "LL_MAX_VEL", "LL_MIN_VEL", "LL_Mean_VEL", "LL_MAX_ACL","LL_MIN_ACL", "LL_Mean_ACL"]] = self.get_length_metrics(FeatureLandmarks.NoseLipL)
+        metrics.loc[0][["JR_MAX", "JR_MIN", "JR_Mean", "JR_MAX_VEL", "JR_MIN_VEL", "JR_Mean_VEL", "JR_MAX_ACL", "JR_MIN_ACL", "JR_Mean_ACL"]] = self.get_length_metrics(FeatureLandmarks.NoseJawR)
+        metrics.loc[0][["JL_MAX", "JL_MIN", "JL_Mean", "JL_MAX_VEL", "JL_MIN_VEL", "JL_Mean_VEL", "JL_MAX_ACL", "JL_MIN_ACL", "JL_Mean_ACL"]] = self.get_length_metrics(FeatureLandmarks.NoseJawL)
         metrics.loc[0]["LL_PATH"] = self.get_LL_path_sum(FeatureLandmarks.LowerLip)
         metrics.loc[0]["JR_PATH"] = self.get_LL_path_sum(FeatureLandmarks.NoseJawR)
         metrics.loc[0]["JL_PATH"] = self.get_LL_path_sum(FeatureLandmarks.NoseJawL)
-        metrics.loc[0]["A_MOUTH"] = self.get_area_metrics(FeatureLandmarks.MouthAreaLeft,FeatureLandmarks.MouthAreaRight, metric_type=metric_type)
+        metrics.loc[0]["A_MOUTH"] = self.get_area_metrics(FeatureLandmarks.MouthAreaLeft,FeatureLandmarks.MouthAreaRight, metric_type='CCC')
         metrics.loc[0]["R_LCRC"] = self.get_distance_metrics(FeatureLandmarks.NoseLipL, FeatureLandmarks.NoseLipR, metric_type='CCC')
         metrics.loc[0]["D_0"] = self.get_distance_metrics(FeatureLandmarks.LEyebrowCanthus, FeatureLandmarks.REyebrowCanthus, metric_type=metric_type)
         metrics.loc[0]["D_1"] = self.get_distance_metrics(FeatureLandmarks.LCanthusMouthC, FeatureLandmarks.RCanthusMouthC, metric_type=metric_type)
