@@ -86,7 +86,10 @@ class FeatureLandmarks(FeatureLandmarks):
     MouthWidth = [48, 54]  # W_{Max} and W_{Min}
     MouthAreaLeft = [54, 51, 57]  # A_Mean and delta_A and A_Absdiff
     MouthAreaRight = [48, 51, 57]  # A_Mean and delta_A and A_Absdiff
-    Corners = [48, 54, 30]  # r_{LCRC}
+    JawAreaLeft = [30, 54, 10]
+    JawAreaRight = [30, 48, 6]
+    LipCorners = [48, 54, 30]  # r_{LCRC}
+    JawCorners = [6, 10, 30] # r_
     NoseLipR = [30, 48] # Nose to right corner of the mouth
     NoseLipL = [30, 54] # Nose to left corner of the mouth
     NoseJawR = [30, 6] # Nose to right jaw
@@ -619,9 +622,11 @@ class ClinicalMetrics(Metrics):
         """
         feature, rest_feature = self.eval_feature(position, FeatureType.DIST)
         normalized = self.normalize_feature(feature, rest_feature, NormOption.RestAvg)
-        velocity = self.three_point_difference(normalized)
+        path = np.sum(normalized)
 
+        velocity = self.three_point_difference(normalized)
         acceleration = self.three_point_difference(velocity)
+        jerk = self.three_point_difference(acceleration)
 
         return normalized.max(), normalized.min(),normalized.mean(), velocity.max(), velocity.min(), velocity.mean(), acceleration.max(), acceleration.min(), acceleration.mean()
 
@@ -708,32 +713,28 @@ class ClinicalMetrics(Metrics):
         metric_type = 'dist'
         if active_frames is not None:
             self._active_frames = active_frames
-        all_metrics = ["O_MAX", "O_MIN", "O_Mean", "O_MAX_VEL", "O_MIN_VEL", "O_Mean_VEL", "O_MAX_ACL", "O_MIN_ACL", "O_Mean_ACL",
-                       "W_MAX", "W_MIN", "W_Mean", "W_MAX_VEL", "W_MIN_VEL","W_Mean_VEL", "W_MAX_ACL", "W_MIN_ACL", "W_Mean_ACL",
-                       "LR_MAX", "LR_MIN", "LR_Mean", "LR_MAX_VEL", "LR_MIN_VEL", "LR_Mean_VEL", "LR_MAX_ACL","LR_MIN_ACL", "LR_Mean_ACL",
-                       "LL_MAX", "LL_MIN", "LL_Mean", "LL_MAX_VEL", "LL_MIN_VEL", "LL_Mean_VEL", "LL_MAX_ACL","LL_MIN_ACL", "LL_Mean_ACL",
-                       "JR_MAX", "JR_MIN", "JR_Mean", "JR_MAX_VEL", "JR_MIN_VEL", "JR_Mean_VEL", "JR_MAX_ACL", "JR_MIN_ACL", "JR_Mean_ACL",
-                       "JL_MAX", "JL_MIN", "JL_Mean", "JL_MAX_VEL", "JL_MIN_VEL", "JL_Mean_VEL", "JL_MAX_ACL", "JL_MIN_ACL", "JL_Mean_ACL",
-                       "LL_PATH", "JR_PATH", "JL_PATH",
-                       "A_MOUTH",
-                       "R_LCRC",
-                       "D_0",
-                       "D_1",
-                       "D_2",
-                       "D_3",
-                       "E_MEAN", "E_RANGE"]
-                       #"D_4"]
+        all_metrics = ["O_MAX", "O_MIN", "O_AVG","O_RANGE" , "vO_MAX", "vO_MIN", "vO_AVG", "aO_MAX", "aO_MIN", "aO_AVG","jO_MAX", "jO_MIN", "jO_AVG",
+                       "W_MAX", "W_MIN", "W_AVG","W_RANGE" , "vW_MAX", "vW_MIN", "vW_AVG", "aW_MAX", "aW_MIN", "aW_AVG","jW_MAX", "jW_MIN", "jW_AVG",
+                       "LL_MAX", "LL_MIN", "LL_AVG","LL_RANGE" ,"LL_PATH", "vLL_MAX", "vLL_MIN", "vLL_AVG", "aLL_MAX", "aLL_MIN", "aLL_AVG","jLL_MAX", "jLL_MIN", "jLL_AVG",
+                       "RC_MAX", "RC_MIN", "RC_AVG","RC_RANGE" ,"RC_PATH", "vRC_MAX", "vRC_MIN", "vRC_AVG", "aRC_MAX", "aRC_MIN", "aRC_AVG","jRC_MAX", "jRC_MIN", "jRC_AVG",
+                       "LC_MAX", "LC_MIN", "LC_AVG","LC_RANGE" ,"LC_PATH", "vLC_MAX", "vLC_MIN", "vLC_AVG", "aLC_MAX", "aLC_MIN", "aLC_AVG","jLC_MAX", "jLC_MIN", "jLC_AVG",
+                       "RJ_MAX", "RJ_MIN", "RJ_AVG","RJ_RANGE" ,"RJ_PATH", "vRJ_MAX", "vRJ_MIN", "vRJ_AVG", "aRJ_MAX", "aRJ_MIN", "aRJ_AVG","jRJ_MAX", "jRJ_MIN", "jRJ_AVG",
+                       "LJ_MAX", "LJ_MIN", "LJ_AVG","LJ_RANGE" ,"LJ_PATH", "vLJ_MAX", "vLJ_MIN", "vLJ_AVG", "aLJ_MAX", "aLJ_MIN", "aLJ_AVG","jLJ_MAX", "jLJ_MIN", "jLJ_AVG",
+                       "RCLC_diff", "RJLJ_diff","C_RCLC","P_RCLC","C_RALA","P_RALA","R_RALA","C_RJLJ","P_RJLJ","C_JRALA","P_JRALA","R_JRALA","e_AVG","e_RANGE",
+                       "tA_Max","tA_MIN","tA_AVG","tA_RANGE","rA_Max","rA_MIN","rA_AVG","rA_RANGE","lA_Max","lA_MIN","lA_AVG","lA_RANGE","A_diff",
+                       "tJA_Max","tJA_MIN","tJA_AVG","tJA_RANGE","rJA_Max","rJA_MIN","rJA_AVG","rJA_RANGE","lJA_Max","lJA_MIN","lJA_AVG","lJA_RANGE","JA_diff"
+                       ]
+
         metrics = pd.DataFrame(columns=all_metrics)
         metrics.loc[0] = 0
-        metrics.loc[0][["O_MAX", "O_MIN", "O_Mean", "O_MAX_VEL", "O_MIN_VEL", "O_Mean_VEL", "O_MAX_ACL", "O_MIN_ACL", "O_Mean_ACL"]]=self.get_length_metrics(FeatureLandmarks.MouthHeight)
-        metrics.loc[0][["W_MAX", "W_MIN", "W_Mean", "W_MAX_VEL", "W_MIN_VEL","W_Mean_VEL", "W_MAX_ACL", "W_MIN_ACL", "W_Mean_ACL"]] = self.get_length_metrics(FeatureLandmarks.MouthWidth)
-        metrics.loc[0][["LR_MAX", "LR_MIN", "LR_Mean", "LR_MAX_VEL", "LR_MIN_VEL", "LR_Mean_VEL", "LR_MAX_ACL","LR_MIN_ACL", "LR_Mean_ACL"]] = self.get_length_metrics(FeatureLandmarks.NoseLipR)
-        metrics.loc[0][["LL_MAX", "LL_MIN", "LL_Mean", "LL_MAX_VEL", "LL_MIN_VEL", "LL_Mean_VEL", "LL_MAX_ACL","LL_MIN_ACL", "LL_Mean_ACL"]] = self.get_length_metrics(FeatureLandmarks.NoseLipL)
-        metrics.loc[0][["JR_MAX", "JR_MIN", "JR_Mean", "JR_MAX_VEL", "JR_MIN_VEL", "JR_Mean_VEL", "JR_MAX_ACL", "JR_MIN_ACL", "JR_Mean_ACL"]] = self.get_length_metrics(FeatureLandmarks.NoseJawR)
-        metrics.loc[0][["JL_MAX", "JL_MIN", "JL_Mean", "JL_MAX_VEL", "JL_MIN_VEL", "JL_Mean_VEL", "JL_MAX_ACL", "JL_MIN_ACL", "JL_Mean_ACL"]] = self.get_length_metrics(FeatureLandmarks.NoseJawL)
-        metrics.loc[0]["LL_PATH"] = self.get_LL_path_sum(FeatureLandmarks.LowerLip)
-        metrics.loc[0]["JR_PATH"] = self.get_LL_path_sum(FeatureLandmarks.NoseJawR)
-        metrics.loc[0]["JL_PATH"] = self.get_LL_path_sum(FeatureLandmarks.NoseJawL)
+        metrics.loc[0][["O_MAX", "O_MIN", "O_AVG","O_RANGE" , "O_PATH","vO_MAX", "vO_MIN", "vO_AVG", "aO_MAX", "aO_MIN", "aO_AVG","jO_MAX", "jO_MIN", "jO_AVG"]]=self.get_length_metrics(FeatureLandmarks.MouthHeight)
+        metrics.loc[0][["W_MAX", "W_MIN", "W_AVG","W_RANGE" ,"W_PATH", "vW_MAX", "vW_MIN", "vW_AVG", "aW_MAX", "aW_MIN", "aW_AVG","jW_MAX", "jW_MIN", "jW_AVG"]] = self.get_length_metrics(FeatureLandmarks.MouthWidth)
+        metrics.loc[0][["LL_MAX", "LL_MIN", "LL_AVG","LL_RANGE" ,"LL_PATH", "vLL_MAX", "vLL_MIN", "vLL_AVG", "aLL_MAX", "aLL_MIN", "aLL_AVG","jLL_MAX", "jLL_MIN", "jLL_AVG"]] = self.get_length_metrics(FeatureLandmarks.LowerLip)
+        metrics.loc[0][["RC_MAX", "RC_MIN", "RC_AVG","RC_RANGE" ,"RC_PATH", "vRC_MAX", "vRC_MIN", "vRC_AVG", "aRC_MAX", "aRC_MIN", "aRC_AVG","jRC_MAX", "jRC_MIN", "jRC_AVG"]] = self.get_length_metrics(FeatureLandmarks.NoseLipR)
+        metrics.loc[0][["LC_MAX", "LC_MIN", "LC_AVG","LC_RANGE" ,"LC_PATH", "vLC_MAX", "vLC_MIN", "vLC_AVG", "aLC_MAX", "aLC_MIN", "aLC_AVG","jLC_MAX", "jLC_MIN", "jLC_AVG"]] = self.get_length_metrics(FeatureLandmarks.NoseLipL)
+        metrics.loc[0][["RJ_MAX", "RJ_MIN", "RJ_AVG","RJ_RANGE" ,"RJ_PATH", "vRJ_MAX", "vRJ_MIN", "vRJ_AVG", "aRJ_MAX", "aRJ_MIN", "aRJ_AVG","jRJ_MAX", "jRJ_MIN", "jRJ_AVG"]] = self.get_length_metrics(FeatureLandmarks.NoseJawR)
+        metrics.loc[0][["LJ_MAX", "LJ_MIN", "LJ_AVG","LJ_RANGE" ,"LJ_PATH", "vLJ_MAX", "vLJ_MIN", "vLJ_AVG", "aLJ_MAX", "aLJ_MIN", "aLJ_AVG","jLJ_MAX", "jLJ_MIN", "jLJ_AVG"]] = self.get_length_metrics(FeatureLandmarks.NoseJawL)
+
         metrics.loc[0]["A_MOUTH"] = self.get_area_metrics(FeatureLandmarks.MouthAreaLeft,FeatureLandmarks.MouthAreaRight, metric_type='CCC')
         metrics.loc[0]["R_LCRC"] = self.get_distance_metrics(FeatureLandmarks.NoseLipL, FeatureLandmarks.NoseLipR, metric_type='CCC')
         metrics.loc[0]["D_0"] = self.get_distance_metrics(FeatureLandmarks.LEyebrowCanthus, FeatureLandmarks.REyebrowCanthus, metric_type=metric_type)
