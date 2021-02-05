@@ -153,6 +153,7 @@ class Metrics:
     _rest_frames: Iterable[int]  # Defines frame to normalize metrics on
     _res_landmarks: pd.DataFrame  # Holds the landmarks for the rest video
     _active_frames: Iterable[int]  # Defines frames to use for metrics
+    _active_frames_len: int # the length of the active frame
     _column_names: List[str]  # Defines the columns that positional data is stored in
     _dimension: int  # The dimension of the landmarks
     _win_length: int = 5  # The window to use for median and low pass filtering
@@ -164,6 +165,7 @@ class Metrics:
         self._landmarks = landmarks
         self._rest_landmarks = rest_frame
         self._active_frames = range(0, 0) if active_frames is None else active_frames
+        self._active_frames_len = 0 if active_frames is None else len(active_frames)
         self._dimension = 0
         # Different dimensions have different column names so we iterate over the column names to find the true dimension
         for column in column_names:
@@ -760,7 +762,7 @@ class ClinicalSignals(Metrics):
         return feature_dist  # TODO: Question: This varies with the length of the active period. Should it be normalized by length of video?
 
 
-    def get_length_metrics(self, position) -> Tuple[float, float, float, float, float, float, float, float, float, float, float, float, float, float]:
+    def get_length_metrics(self, position) -> Tuple[float, float, float, float]:
         """
         Calculates the Delta (max - min) and mean of a given distance between two points normalized
         by its value at rest.
@@ -769,16 +771,17 @@ class ClinicalSignals(Metrics):
         """
         feature, rest_feature = self.eval_feature(position, FeatureType.DIST)
         normalized = self.normalize_feature(feature, rest_feature, NormOption.RestAvgDiv)
-        path = np.sum(normalized)
+
 
         velocity = self.three_point_difference(normalized)
         acceleration = self.three_point_difference(velocity)
         jerk = self.three_point_difference(acceleration)
 
+        result = np.vstack((normalized, velocity, acceleration, jerk)).transpose()
 
-        return normalized.max(), normalized.min(),normalized.mean(),np.ptp(normalized), path,  velocity.max(), velocity.min(), velocity.mean(), acceleration.max(), acceleration.min(), acceleration.mean(), jerk.max(), jerk.min(), jerk.mean()
+        return result
 
-    def get_area_metrics(self, positionLeft, postionRight) -> Tuple[float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float]:
+    def get_area_metrics(self, positionLeft, postionRight) -> Tuple[float, float, float, float]:
         """
         Calculates a metric between two areas
         The areas are normalized by their average values during rest
@@ -802,18 +805,10 @@ class ClinicalSignals(Metrics):
 
         #area_total_rest = left_rest + right_rest
         #area_total_normalized = self.normalize_feature(area_total, area_total_rest, NormOption.RestAvgDiv)
+        result = np.vstack((normalized_area_total, normalized_right_area, normalized_left_area, normalized_area_diff)).transpose()
 
-        C_RALA  = self.concordance_correlation_coefficient(left_area, right_area)
-        pearson_corr = np.corrcoef(left_area.reshape(1,-1), right_area.reshape(1,-1))
-        P_RALA = pearson_corr[1,0]
-        rA_AVG = normalized_right_area.mean()
-        lA_AVG = normalized_left_area.mean()
-        R_RALA = rA_AVG /lA_AVG
 
-        return normalized_area_total.max(), normalized_area_total.min(), normalized_area_total.mean(), np.ptp(normalized_area_total),\
-               normalized_right_area.max(), normalized_right_area.min(), rA_AVG, np.ptp(normalized_right_area),\
-               normalized_left_area.max(), normalized_left_area.min(), lA_AVG, np.ptp(normalized_left_area),\
-               normalized_area_diff.mean(), C_RALA, P_RALA, R_RALA
+        return result
 
     def get_distance_metrics(self, positionLeft, postionRight) -> [float,float,float]:
         """
@@ -847,7 +842,7 @@ class ClinicalSignals(Metrics):
         feature_width, feature_width_rest = self.eval_feature(FeatureLandmarks.MouthWidth, FeatureType.DIST)
         feature_opening, feature_opening_rest = self.eval_feature(FeatureLandmarks.MouthHeight, FeatureType.DIST)
         eccentricities = self.compute_eccentricity(feature_width, feature_opening)
-        return eccentricities.mean(), np.ptp(eccentricities)
+        return eccentricities
 
 
     def compute_metrics(self, active_frames: Optional[Iterable[int]] = None) -> pd.DataFrame:
@@ -858,38 +853,35 @@ class ClinicalSignals(Metrics):
         #metric_type = 'All'
         if active_frames is not None:
             self._active_frames = active_frames
-        all_metrics = ["O_MAX", "O_MIN", "O_AVG","O_RANGE" ,"O_PATH", "vO_MAX", "vO_MIN", "vO_AVG", "aO_MAX", "aO_MIN", "aO_AVG","jO_MAX", "jO_MIN", "jO_AVG",
-                       "W_MAX", "W_MIN", "W_AVG","W_RANGE" ,"W_PATH", "vW_MAX", "vW_MIN", "vW_AVG", "aW_MAX", "aW_MIN", "aW_AVG","jW_MAX", "jW_MIN", "jW_AVG",
-                       "LL_MAX", "LL_MIN", "LL_AVG","LL_RANGE" ,"LL_PATH", "vLL_MAX", "vLL_MIN", "vLL_AVG", "aLL_MAX", "aLL_MIN", "aLL_AVG","jLL_MAX", "jLL_MIN", "jLL_AVG",
-                       "RC_MAX", "RC_MIN", "RC_AVG","RC_RANGE" ,"RC_PATH", "vRC_MAX", "vRC_MIN", "vRC_AVG", "aRC_MAX", "aRC_MIN", "aRC_AVG","jRC_MAX", "jRC_MIN", "jRC_AVG",
-                       "LC_MAX", "LC_MIN", "LC_AVG","LC_RANGE" ,"LC_PATH", "vLC_MAX", "vLC_MIN", "vLC_AVG", "aLC_MAX", "aLC_MIN", "aLC_AVG","jLC_MAX", "jLC_MIN", "jLC_AVG",
-                       "RJ_MAX", "RJ_MIN", "RJ_AVG","RJ_RANGE" ,"RJ_PATH", "vRJ_MAX", "vRJ_MIN", "vRJ_AVG", "aRJ_MAX", "aRJ_MIN", "aRJ_AVG","jRJ_MAX", "jRJ_MIN", "jRJ_AVG",
-                       "LJ_MAX", "LJ_MIN", "LJ_AVG","LJ_RANGE" ,"LJ_PATH", "vLJ_MAX", "vLJ_MIN", "vLJ_AVG", "aLJ_MAX", "aLJ_MIN", "aLJ_AVG","jLJ_MAX", "jLJ_MIN", "jLJ_AVG",
-                       "RCLC_diff", "RJLJ_diff","C_RCLC","P_RCLC","C_RALA","P_RALA","R_RALA","C_RJLJ","P_RJLJ","C_JRALA","P_JRALA","R_JRALA","e_AVG","e_RANGE",
-                       "tA_Max","tA_MIN","tA_AVG","tA_RANGE","rA_Max","rA_MIN","rA_AVG","rA_RANGE","lA_Max","lA_MIN","lA_AVG","lA_RANGE","A_diff",
-                       "tJA_Max","tJA_MIN","tJA_AVG","tJA_RANGE","rJA_Max","rJA_MIN","rJA_AVG","rJA_RANGE","lJA_Max","lJA_MIN","lJA_AVG","lJA_RANGE","JA_diff"
+            self._active_frames_len = len(active_frames)
+
+        all_metrics = ["O", "vO",  "aO", "jO",
+                       "W", "vW", "aW", "jW",
+                       "LL", "vLL", "aLL", "jLL",
+                       "RC", "vRC", "aRC", "jRC",
+                       "LC", "vLC", "aLC", "jLC",
+                       "RJ", "vRJ", "aRJ", "jRJ",
+                       "LJ", "vLJ", "aLJ", "jLJ",
+                       "A_MOUTH", "rA_MOUTH","lA_MOUTH","A_Mouth_diff",
+                       "A_JAW","rA_JAW","lA_JAW","A_JAW_diff", "e"
                        ]
 
-        metrics = pd.DataFrame(columns=all_metrics)
-        metrics.loc[0] = 0
-        metrics.loc[0][["O_MAX", "O_MIN", "O_AVG","O_RANGE" , "O_PATH","vO_MAX", "vO_MIN", "vO_AVG", "aO_MAX", "aO_MIN", "aO_AVG","jO_MAX", "jO_MIN", "jO_AVG"]]=self.get_length_metrics(FeatureLandmarks.MouthHeight)
-        metrics.loc[0][["W_MAX", "W_MIN", "W_AVG","W_RANGE" ,"W_PATH", "vW_MAX", "vW_MIN", "vW_AVG", "aW_MAX", "aW_MIN", "aW_AVG","jW_MAX", "jW_MIN", "jW_AVG"]] = self.get_length_metrics(FeatureLandmarks.MouthWidth)
-        metrics.loc[0][["LL_MAX", "LL_MIN", "LL_AVG","LL_RANGE" ,"LL_PATH", "vLL_MAX", "vLL_MIN", "vLL_AVG", "aLL_MAX", "aLL_MIN", "aLL_AVG","jLL_MAX", "jLL_MIN", "jLL_AVG"]] = self.get_length_metrics(FeatureLandmarks.LowerLip)
-        metrics.loc[0][["RC_MAX", "RC_MIN", "RC_AVG","RC_RANGE" ,"RC_PATH", "vRC_MAX", "vRC_MIN", "vRC_AVG", "aRC_MAX", "aRC_MIN", "aRC_AVG","jRC_MAX", "jRC_MIN", "jRC_AVG"]] = self.get_length_metrics(FeatureLandmarks.NoseLipR)
-        metrics.loc[0][["LC_MAX", "LC_MIN", "LC_AVG","LC_RANGE" ,"LC_PATH", "vLC_MAX", "vLC_MIN", "vLC_AVG", "aLC_MAX", "aLC_MIN", "aLC_AVG","jLC_MAX", "jLC_MIN", "jLC_AVG"]] = self.get_length_metrics(FeatureLandmarks.NoseLipL)
-        metrics.loc[0][["RJ_MAX", "RJ_MIN", "RJ_AVG","RJ_RANGE" ,"RJ_PATH", "vRJ_MAX", "vRJ_MIN", "vRJ_AVG", "aRJ_MAX", "aRJ_MIN", "aRJ_AVG","jRJ_MAX", "jRJ_MIN", "jRJ_AVG"]] = self.get_length_metrics(FeatureLandmarks.NoseJawR)
-        metrics.loc[0][["LJ_MAX", "LJ_MIN", "LJ_AVG","LJ_RANGE" ,"LJ_PATH", "vLJ_MAX", "vLJ_MIN", "vLJ_AVG", "aLJ_MAX", "aLJ_MIN", "aLJ_AVG","jLJ_MAX", "jLJ_MIN", "jLJ_AVG"]] = self.get_length_metrics(FeatureLandmarks.NoseJawL)
+        metrics = pd.DataFrame(index=range(self._active_frames_len), columns=all_metrics)
+        #metrics.loc[0] = 0
+        metrics.loc[0:self._active_frames_len,["O", "vO",  "aO", "jO"]]=self.get_length_metrics(FeatureLandmarks.MouthHeight)
 
-        metrics.loc[0]["tA_Max","tA_MIN","tA_AVG","tA_RANGE","rA_Max","rA_MIN","rA_AVG","rA_RANGE","lA_Max","lA_MIN","lA_AVG","lA_RANGE","A_diff","C_RALA","P_RALA","R_RALA"] = self.get_area_metrics(FeatureLandmarks.MouthAreaLeft,FeatureLandmarks.MouthAreaRight)
-        metrics.loc[0]["tJA_Max","tJA_MIN","tJA_AVG","tJA_RANGE","rJA_Max","rJA_MIN","rJA_AVG","rJA_RANGE","lJA_Max","lJA_MIN","lJA_AVG","lJA_RANGE","JA_diff","C_JRALA","P_JRALA","R_JRALA"] = self.get_area_metrics(FeatureLandmarks.JawAreaLeft,FeatureLandmarks.JawAreaRight)
-        metrics.loc[0]["RCLC_diff", "C_RCLC", "P_RCLC"] = self.get_distance_metrics(FeatureLandmarks.NoseLipL, FeatureLandmarks.NoseLipR)
-        metrics.loc[0]["RJLJ_diff", "C_RJLJ", "P_RJLJ"] = self.get_distance_metrics(FeatureLandmarks.NoseJawL, FeatureLandmarks.NoseJawR)
-        #metrics.loc[0]["D_0"] = self.get_distance_metrics(FeatureLandmarks.LEyebrowCanthus, FeatureLandmarks.REyebrowCanthus, metric_type=metric_type)
-        #metrics.loc[0]["D_1"] = self.get_distance_metrics(FeatureLandmarks.LCanthusMouthC, FeatureLandmarks.RCanthusMouthC, metric_type=metric_type)
-        #metrics.loc[0]["D_2"] = self.get_distance_metrics(FeatureLandmarks.LCanthusMouthU, FeatureLandmarks.RCanthusMouthU, metric_type=metric_type)
-        #metrics.loc[0]["D_3"] = self.get_distance_metrics(FeatureLandmarks.LMouthCMouthU,FeatureLandmarks.RMouthCMouthU, metric_type=metric_type)
-        # metrics.loc[0]["D_4"] = self.get_distance_metrics(StrokeFeatureLandmarks.LMouthCMouthL, StrokeFeatureLandmarks.RMouthCMouthL, metric_type=metric_type)
-        metrics.loc[0][["e_AVG","e_RANGE"]] = self.get_eccentricity_metrics()
+        metrics.loc[0:self._active_frames_len,["W", "vW", "aW", "jW"]] = self.get_length_metrics(FeatureLandmarks.MouthWidth)
+        metrics.loc[0:self._active_frames_len,["LL", "vLL", "aLL", "jLL"]] = self.get_length_metrics(FeatureLandmarks.LowerLip)
+        metrics.loc[0:self._active_frames_len,["RC", "vRC", "aRC", "jRC"]] = self.get_length_metrics(FeatureLandmarks.NoseLipR)
+        metrics.loc[0:self._active_frames_len,["LC", "vLC", "aLC", "jLC"]] = self.get_length_metrics(FeatureLandmarks.NoseLipL)
+        metrics.loc[0:self._active_frames_len,["RJ", "vRJ", "aRJ", "jRJ"]] = self.get_length_metrics(FeatureLandmarks.NoseJawR)
+        metrics.loc[0:self._active_frames_len,["LJ", "vLJ", "aLJ", "jLJ"]] = self.get_length_metrics(FeatureLandmarks.NoseJawL)
+        metrics.loc[0:self._active_frames_len,["A_MOUTH", "rA_MOUTH","lA_MOUTH","A_Mouth_diff"]] = self.get_area_metrics(FeatureLandmarks.MouthAreaLeft,FeatureLandmarks.MouthAreaRight)
+        metrics.loc[0:self._active_frames_len,["A_JAW","rA_JAW","lA_JAW","A_JAW_diff"]] = self.get_area_metrics(FeatureLandmarks.JawAreaLeft,FeatureLandmarks.JawAreaRight)
+        metrics.loc[0:self._active_frames_len,["e"]] = self.get_eccentricity_metrics().reshape(self._active_frames_len,1)
+
+
+
         return metrics
 
 
