@@ -96,6 +96,8 @@ class FeatureLandmarks(FeatureLandmarks):
     REyebrowCanthus = [20, 39]  # d_0{diff} Right side
     LCanthusMouthC = [42, 54]  # d_1{diff} Left side
     RCanthusMouthC = [39, 48]  # d_1{diff} Right side
+    LCanthusJawC = [42, 10]  # Left side jaw distance
+    RCanthusJawC = [39, 6]  # Right side jaw distance
     LCanthusMouthU = [42, 51]  # d_2{diff} Right side       P.S. There's a
     RCanthusMouthU = [39, 51]  # d_2{diff} Left side        typo in the paper
     LMouthCMouthU = [54, 51]  # d_3{diff} Right side
@@ -364,6 +366,11 @@ class Metrics:
 
             data = self.median_filter(data)
             rest_data = self.median_filter(rest_data)
+            #print('data in column to numpy')
+            #print(data)
+            #print('rest data in column to numpy')
+            #print(rest_data)
+            #print()
         return data, rest_data
 
     def median_filter(self, data: np.ndarray) -> np.ndarray:
@@ -406,7 +413,8 @@ class Metrics:
         if norm_type != NormOption.RestNDist:
             # Then the user wants to normalize over the mean of the feature in the rest frames
             total_rest_frames = len(rest_feature)
-            rest_pad = max(0, int(round((total_rest_frames - 500) / 2)))
+            ##### CHANGED 500 TO 50 FOR MODELLED DATA
+            rest_pad = max(0, int(round((total_rest_frames - 10) / 2)))
             if rest_pad != 0:
                 active_rest_feature = rest_feature[rest_pad:-rest_pad]
             else:
@@ -472,8 +480,22 @@ class Metrics:
         if feature_type == FeatureType.DIST:
             feature = np.linalg.norm(data[:, 0] - data[:, 1], axis=1)
             rest_feature = np.linalg.norm(rest_data[:, 0] - rest_data[:, 1], axis=1)
-            outlier_mask = self.screen_outliers(rest_feature, z_threshold=2.5)
-            rest_masked = np.ma.masked_array(rest_feature, mask=outlier_mask)
+
+            #########################################################################
+            # CHANGE FOR THE MODELLED DATA
+            #outlier_mask = self.screen_outliers(rest_feature, z_threshold=2.5)
+            #rest_masked = np.ma.masked_array(rest_feature, mask=outlier_mask)
+            ##########################################################################
+            ############# NEW LINE ADDED INSTEAD
+            rest_masked = rest_feature
+            print('active features in eval_feature')
+            print(feature)
+            print('rest features in eval_feature')
+            print(rest_feature)
+            print('rest masked in eval_feature')
+            print(rest_masked)
+            print()
+
             return self.get_active_feature(feature), rest_masked
         if feature_type == FeatureType.AREA:
             out = np.zeros(data.shape[0])
@@ -500,6 +522,11 @@ class StrokeMetrics(Metrics):
         """
         feature, rest_feature = self.eval_feature(position, FeatureType.DIST)
         normalized = self.normalize_feature(feature, rest_feature, NormOption.RestAvgDiv)
+        ###############################################################################
+        ###### DEBUG #######################
+        print('normalized feature in get_length_metrics')
+        print(normalized)
+        ###################################
         velocity = self.three_point_difference(normalized)
         
         acceleration = self.three_point_difference(velocity)
@@ -611,7 +638,7 @@ class ClinicalMetrics(Metrics):
         :return: Distance of path
         """
         feature, rest_feature = self.eval_feature(position, FeatureType.DIST)
-        normalized = self.normalize_feature(feature, rest_feature, NormOption.RestAvgDiv)
+        normalized = self.normalize_feature(feature, rest_feature, NormOption.RestAvgSub)
         feature_dist = np.sum(normalized)
         return feature_dist  # TODO: Question: This varies with the length of the active period. Should it be normalized by length of video?
 
@@ -623,9 +650,16 @@ class ClinicalMetrics(Metrics):
         Also max and min velocity
         :return: Tuple of (Delta Distance, Mean Distance, Max Velcoity, Min Velocity)
         """
+        print('I came here')
         feature, rest_feature = self.eval_feature(position, FeatureType.DIST)
-        normalized = self.normalize_feature(feature, rest_feature, NormOption.RestAvgDiv)
+        normalized = self.normalize_feature(feature, rest_feature, NormOption.RestAvgSub)
         path = np.sum(normalized)
+
+        ###############################################################################
+        ###### DEBUG #######################
+        print('normalized feature in get_length_metrics')
+        print(normalized)
+        ###################################
 
         velocity = self.three_point_difference(normalized)
         acceleration = self.three_point_difference(velocity)
@@ -647,8 +681,8 @@ class ClinicalMetrics(Metrics):
         """
         left_area, left_rest = self.eval_feature(positionLeft, FeatureType.AREA)
         right_area, right_rest = self.eval_feature(postionRight, FeatureType.AREA)
-        normalized_left_area = self.normalize_feature(left_area, left_rest, NormOption.RestAvgDiv)
-        normalized_right_area = self.normalize_feature(right_area, right_rest, NormOption.RestAvgDiv)
+        normalized_left_area = self.normalize_feature(left_area, left_rest, NormOption.RestAvgSub)
+        normalized_right_area = self.normalize_feature(right_area, right_rest, NormOption.RestAvgSub)
 
         normalized_area_diff = np.abs(normalized_left_area - normalized_right_area)
         #area_rest_diff = np.abs(left_rest - right_rest)
@@ -687,7 +721,7 @@ class ClinicalMetrics(Metrics):
 
         feature = np.abs(left_feature-right_feature)
         feature_rest = np.abs(left_rest-right_rest)
-        feature_normalized = self.normalize_feature(feature, feature_rest, NormOption.RestAvgDiv)
+        feature_normalized = self.normalize_feature(feature, feature_rest, NormOption.RestAvgSub)
 
         concordance = self.concordance_correlation_coefficient(left_feature, right_feature)
         pearson_corr = np.corrcoef(left_feature.reshape(1, -1), right_feature.reshape(1, -1))
@@ -737,18 +771,14 @@ class ClinicalMetrics(Metrics):
         metrics.loc[0][["LC_MAX", "LC_MIN", "LC_AVG","LC_RANGE" ,"LC_PATH", "vLC_MAX", "vLC_MIN", "vLC_AVG", "aLC_MAX", "aLC_MIN", "aLC_AVG","jLC_MAX", "jLC_MIN", "jLC_AVG"]] = self.get_length_metrics(FeatureLandmarks.NoseLipL)
         metrics.loc[0][["RC_MAX_2", "RC_MIN_2", "RC_AVG_2","RC_RANGE_2" ,"RC_PATH_2", "vRC_MAX_2", "vRC_MIN_2", "vRC_AVG_2", "aRC_MAX_2", "aRC_MIN_2", "aRC_AVG_2","jRC_MAX_2", "jRC_MIN_2", "jRC_AVG_2"]] = self.get_length_metrics(FeatureLandmarks.RCanthusMouthC)
         metrics.loc[0][["LC_MAX_2", "LC_MIN_2", "LC_AVG_2","LC_RANGE_2" ,"LC_PATH_2", "vLC_MAX_2", "vLC_MIN_2", "vLC_AVG_2", "aLC_MAX_2", "aLC_MIN_2", "aLC_AVG_2","jLC_MAX_2", "jLC_MIN_2", "jLC_AVG_2"]] = self.get_length_metrics(FeatureLandmarks.LCanthusMouthC)
-        metrics.loc[0][["RJ_MAX", "RJ_MIN", "RJ_AVG","RJ_RANGE" ,"RJ_PATH", "vRJ_MAX", "vRJ_MIN", "vRJ_AVG", "aRJ_MAX", "aRJ_MIN", "aRJ_AVG","jRJ_MAX", "jRJ_MIN", "jRJ_AVG"]] = self.get_length_metrics(FeatureLandmarks.NoseJawR)
-        metrics.loc[0][["LJ_MAX", "LJ_MIN", "LJ_AVG","LJ_RANGE" ,"LJ_PATH", "vLJ_MAX", "vLJ_MIN", "vLJ_AVG", "aLJ_MAX", "aLJ_MIN", "aLJ_AVG","jLJ_MAX", "jLJ_MIN", "jLJ_AVG"]] = self.get_length_metrics(FeatureLandmarks.NoseJawL)
+        metrics.loc[0][["RJ_MAX", "RJ_MIN", "RJ_AVG","RJ_RANGE" ,"RJ_PATH", "vRJ_MAX", "vRJ_MIN", "vRJ_AVG", "aRJ_MAX", "aRJ_MIN", "aRJ_AVG","jRJ_MAX", "jRJ_MIN", "jRJ_AVG"]] = self.get_length_metrics(FeatureLandmarks.LCanthusJawC)
+        metrics.loc[0][["LJ_MAX", "LJ_MIN", "LJ_AVG","LJ_RANGE" ,"LJ_PATH", "vLJ_MAX", "vLJ_MIN", "vLJ_AVG", "aLJ_MAX", "aLJ_MIN", "aLJ_AVG","jLJ_MAX", "jLJ_MIN", "jLJ_AVG"]] = self.get_length_metrics(FeatureLandmarks.LCanthusJawC)
 
         metrics.loc[0]["tA_Max","tA_MIN","tA_AVG","tA_RANGE","rA_Max","rA_MIN","rA_AVG","rA_RANGE","lA_Max","lA_MIN","lA_AVG","lA_RANGE","A_diff","C_RALA","P_RALA","R_RALA"] = self.get_area_metrics(FeatureLandmarks.MouthAreaLeft,FeatureLandmarks.MouthAreaRight)
         metrics.loc[0]["tJA_Max","tJA_MIN","tJA_AVG","tJA_RANGE","rJA_Max","rJA_MIN","rJA_AVG","rJA_RANGE","lJA_Max","lJA_MIN","lJA_AVG","lJA_RANGE","JA_diff","C_JRALA","P_JRALA","R_JRALA"] = self.get_area_metrics(FeatureLandmarks.JawAreaLeft,FeatureLandmarks.JawAreaRight)
         metrics.loc[0]["RCLC_diff", "C_RCLC", "P_RCLC"] = self.get_distance_metrics(FeatureLandmarks.NoseLipL, FeatureLandmarks.NoseLipR)
         metrics.loc[0]["RJLJ_diff", "C_RJLJ", "P_RJLJ"] = self.get_distance_metrics(FeatureLandmarks.NoseJawL, FeatureLandmarks.NoseJawR)
-        #metrics.loc[0]["D_0"] = self.get_distance_metrics(FeatureLandmarks.LEyebrowCanthus, FeatureLandmarks.REyebrowCanthus, metric_type=metric_type)
-        #metrics.loc[0]["D_1"] = self.get_distance_metrics(FeatureLandmarks.LCanthusMouthC, FeatureLandmarks.RCanthusMouthC, metric_type=metric_type)
-        #metrics.loc[0]["D_2"] = self.get_distance_metrics(FeatureLandmarks.LCanthusMouthU, FeatureLandmarks.RCanthusMouthU, metric_type=metric_type)
-        #metrics.loc[0]["D_3"] = self.get_distance_metrics(FeatureLandmarks.LMouthCMouthU,FeatureLandmarks.RMouthCMouthU, metric_type=metric_type)
-        # metrics.loc[0]["D_4"] = self.get_distance_metrics(StrokeFeatureLandmarks.LMouthCMouthL, StrokeFeatureLandmarks.RMouthCMouthL, metric_type=metric_type)
+
         metrics.loc[0][["e_AVG","e_RANGE"]] = self.get_eccentricity_metrics()
         return metrics
 
@@ -761,7 +791,7 @@ class ClinicalSignals(Metrics):
         :return: Distance of path
         """
         feature, rest_feature = self.eval_feature(position, FeatureType.DIST)
-        normalized = self.normalize_feature(feature, rest_feature, NormOption.RestAvgDiv)
+        normalized = self.normalize_feature(feature, rest_feature, NormOption.RestAvgSub)
         feature_dist = np.sum(normalized)
         return feature_dist  # TODO: Question: This varies with the length of the active period. Should it be normalized by length of video?
 
@@ -774,7 +804,7 @@ class ClinicalSignals(Metrics):
         :return: Tuple of (Delta Distance, Mean Distance, Max Velcoity, Min Velocity)
         """
         feature, rest_feature = self.eval_feature(position, FeatureType.DIST)
-        normalized = self.normalize_feature(feature, rest_feature, NormOption.RestAvgDiv)
+        normalized = self.normalize_feature(feature, rest_feature, NormOption.RestAvgSub)
 
 
         velocity = self.three_point_difference(normalized)
@@ -798,8 +828,8 @@ class ClinicalSignals(Metrics):
         """
         left_area, left_rest = self.eval_feature(positionLeft, FeatureType.AREA)
         right_area, right_rest = self.eval_feature(postionRight, FeatureType.AREA)
-        normalized_left_area = self.normalize_feature(left_area, left_rest, NormOption.RestAvgDiv)
-        normalized_right_area = self.normalize_feature(right_area, right_rest, NormOption.RestAvgDiv)
+        normalized_left_area = self.normalize_feature(left_area, left_rest, NormOption.RestAvgSub)
+        normalized_right_area = self.normalize_feature(right_area, right_rest, NormOption.RestAvgSub)
 
         normalized_area_diff = np.abs(normalized_left_area - normalized_right_area)
         #area_rest_diff = np.abs(left_rest - right_rest)
@@ -830,7 +860,7 @@ class ClinicalSignals(Metrics):
 
         feature = np.abs(left_feature-right_feature)
         feature_rest = np.abs(left_rest-right_rest)
-        feature_normalized = self.normalize_feature(feature, feature_rest, NormOption.RestAvgDiv)
+        feature_normalized = self.normalize_feature(feature, feature_rest, NormOption.RestAvgSub)
 
         concordance = self.concordance_correlation_coefficient(left_feature, right_feature)
         pearson_corr = np.corrcoef(left_feature.reshape(1, -1), right_feature.reshape(1, -1))
@@ -882,8 +912,8 @@ class ClinicalSignals(Metrics):
         metrics.loc[0:self._active_frames_len,["LC", "vLC", "aLC", "jLC"]] = self.get_length_metrics(FeatureLandmarks.NoseLipL)
         metrics.loc[0:self._active_frames_len,["RC_2", "vRC_2", "aRC_2", "jRC_2"]] = self.get_length_metrics(FeatureLandmarks.RCanthusMouthC)
         metrics.loc[0:self._active_frames_len,["LC_2", "vLC_2", "aLC_2", "jLC_2"]] = self.get_length_metrics(FeatureLandmarks.LCanthusMouthC)
-        metrics.loc[0:self._active_frames_len,["RJ", "vRJ", "aRJ", "jRJ"]] = self.get_length_metrics(FeatureLandmarks.NoseJawR)
-        metrics.loc[0:self._active_frames_len,["LJ", "vLJ", "aLJ", "jLJ"]] = self.get_length_metrics(FeatureLandmarks.NoseJawL)
+        metrics.loc[0:self._active_frames_len,["RJ", "vRJ", "aRJ", "jRJ"]] = self.get_length_metrics(FeatureLandmarks.RCanthusJawC)
+        metrics.loc[0:self._active_frames_len,["LJ", "vLJ", "aLJ", "jLJ"]] = self.get_length_metrics(FeatureLandmarks.LCanthusJawC)
         metrics.loc[0:self._active_frames_len,["A_MOUTH", "rA_MOUTH","lA_MOUTH","A_Mouth_diff"]] = self.get_area_metrics(FeatureLandmarks.MouthAreaLeft,FeatureLandmarks.MouthAreaRight)
         metrics.loc[0:self._active_frames_len,["A_JAW","rA_JAW","lA_JAW","A_JAW_diff"]] = self.get_area_metrics(FeatureLandmarks.JawAreaLeft,FeatureLandmarks.JawAreaRight)
         metrics.loc[0:self._active_frames_len,["e"]] = self.get_eccentricity_metrics().reshape(self._active_frames_len,1)
@@ -1024,7 +1054,11 @@ class ALSorStrokeMetrics(StrokeMetrics, ALSMetrics):
 
 
 if __name__ == "__main__":
-    df = pd.read_csv("/Users/aidandempster/projects/uhn/vidProc/demo/preprocessed.csv")
-    test_metrics = StrokeMetrics(df, rest_frames=range(10, 100), active_frames=range(300, 600))
+    #df = pd.read_csv("/Users/aidandempster/projects/uhn/vidProc/demo/preprocessed.csv")
+    df_r = pd.read_csv("/Users/denizjafari/documents/CODE/ClinicalScore/ClinicalScore/DataModeling/NF000_02_RST_REST_landmarksFiltered3D.csv")
+    df_l = pd.read_csv("/Users/denizjafari/documents/CODE/ClinicalScore/ClinicalScore/DataModeling/NF000_02_BBP_NORMAL_landmarksFiltered3D.csv")
+    #test_metrics = ClinicalMetrics(df, rest_frames=range(10, 100), active_frames=range(300, 600))
+    test_metrics = ClinicalMetrics(df_l, df_r, active_frames=range(99))
     metrics = test_metrics.compute_metrics()
     print(metrics)
+
