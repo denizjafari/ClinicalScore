@@ -445,7 +445,7 @@ class Metrics:
         if 'Time_Stamp (s)' in self._landmarks.columns:
             return signal.filtfilt(self._fil_coeffs[0], self._fil_coeffs[1], feature)
         else:
-            print("Column with name 'Time_Stamp (s)' so no low pass filter is applied")
+            print("No Column with name 'Time_Stamp (s)' so no low pass filter is applied")
             return feature
 
     @staticmethod
@@ -650,7 +650,7 @@ class ClinicalMetrics(Metrics):
         Also max and min velocity
         :return: Tuple of (Delta Distance, Mean Distance, Max Velcoity, Min Velocity)
         """
-        print('I came here')
+
         feature, rest_feature = self.eval_feature(position, FeatureType.DIST)
         normalized = self.normalize_feature(feature, rest_feature, NormOption.RestAvgSub)
         path = np.sum(normalized)
