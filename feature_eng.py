@@ -343,7 +343,7 @@ class Metrics:
         else:
             raise Exception(f"Area must be in 2D or 3D space, not {self._dimension}D space")
 
-    def columns_to_numpy(self, landmark_ids: List[int], app_filter: bool = True) -> Tuple[np.ndarray, np.ndarray]:
+    def columns_to_numpy(self, landmark_ids: List[int], app_filter: bool = False) -> Tuple[np.ndarray, np.ndarray]:
         """
         Returns an array where the first dimension resolves to the frame and
         the second and third dimensions holds the position data for each column
@@ -401,7 +401,7 @@ class Metrics:
         return z_scores > z_threshold
 
     def normalize_feature(self, feature: np.ndarray, rest_feature: np.ndarray, norm_type: NormOption,
-                          app_lowpass=False) -> np.ndarray:
+                          app_lowpass=True) -> np.ndarray:
         """
         Normalizes a feature based on the rest frame
         :param feature: A 1D feature array for distance or area of the full video
@@ -478,16 +478,23 @@ class Metrics:
         # df = pd.DataFrame({"data": data[:, 0, 0], "filtered": filtered_data[:, 0, 0], "diff": data[:, 0, 0]-filtered_data[:, 0, 0]})
         # df.to_csv("./test.csv")
         if feature_type == FeatureType.DIST:
+            print('shape of the data is ')
+            print('shape of the data is ')
+            print('shape of the data is ')
+            print('shape of the data is ')
+            print('shape of the data is ')
+
+            print(data.shape)
             feature = np.linalg.norm(data[:, 0] - data[:, 1], axis=1)
             rest_feature = np.linalg.norm(rest_data[:, 0] - rest_data[:, 1], axis=1)
 
             #########################################################################
             # CHANGE FOR THE MODELLED DATA
-            #outlier_mask = self.screen_outliers(rest_feature, z_threshold=2.5)
-            #rest_masked = np.ma.masked_array(rest_feature, mask=outlier_mask)
+            outlier_mask = self.screen_outliers(rest_feature, z_threshold=2.5)
+            rest_masked = np.ma.masked_array(rest_feature, mask=outlier_mask)
             ##########################################################################
             ############# NEW LINE ADDED INSTEAD
-            rest_masked = rest_feature
+            #rest_masked = rest_feature
             print('active features in eval_feature')
             print(feature)
             print('rest features in eval_feature')
