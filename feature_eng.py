@@ -465,7 +465,7 @@ class Metrics:
         """
         return feature[self._active_frames]
 
-    def eval_feature(self, feature: FeatureLandmarks, feature_type: FeatureType, app_median=True) -> Tuple[
+    def eval_feature(self, feature: FeatureLandmarks, feature_type: FeatureType, app_median=False) -> Tuple[
         np.ndarray, np.ndarray]:
         """
         Evaluates a set of landmarks with the given feature type
@@ -485,16 +485,20 @@ class Metrics:
             print('shape of the data is ')
 
             print(data.shape)
+            print("data for the first landmark")
+            print(data[:, 0])
+            print("data for the second landmark")
+            print(data[:, 1])
             feature = np.linalg.norm(data[:, 0] - data[:, 1], axis=1)
             rest_feature = np.linalg.norm(rest_data[:, 0] - rest_data[:, 1], axis=1)
 
             #########################################################################
             # CHANGE FOR THE MODELLED DATA
             outlier_mask = self.screen_outliers(rest_feature, z_threshold=2.5)
-            rest_masked = np.ma.masked_array(rest_feature, mask=outlier_mask)
+            #rest_masked = np.ma.masked_array(rest_feature, mask=outlier_mask)
             ##########################################################################
             ############# NEW LINE ADDED INSTEAD
-            #rest_masked = rest_feature
+            rest_masked = rest_feature
             print('active features in eval_feature')
             print(feature)
             print('rest features in eval_feature')
