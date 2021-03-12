@@ -483,6 +483,7 @@ class Metrics:
             print('shape of the data is ')
             print('shape of the data is ')
             print('shape of the data is ')
+            print("THIS STATEMENT!!!!!!!!!!!!")
 
             print(data.shape)
             print("data for the first landmark")
