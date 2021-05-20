@@ -95,7 +95,9 @@ class FeatureLandmarks(FeatureLandmarks):
     LEyebrowCanthus = [23, 42]  # d_0{diff} Left side
     REyebrowCanthus = [20, 39]  # d_0{diff} Right side
     LCanthusMouthC = [42, 54]  # d_1{diff} Left side
+    LCanthusJaw = [42, 10]  # d_1{diff} jaw  Left side
     RCanthusMouthC = [39, 48]  # d_1{diff} Right side
+    RCanthusJaw = [39, 6]  # d_1{diff} jaw Right side
     LCanthusMouthU = [42, 51]  # d_2{diff} Right side       P.S. There's a
     RCanthusMouthU = [39, 51]  # d_2{diff} Left side        typo in the paper
     LMouthCMouthU = [54, 51]  # d_3{diff} Right side
@@ -108,9 +110,10 @@ class FeatureLandmarks(FeatureLandmarks):
 default_columns = [
     "landmark_{}_x",
     "landmark_{}_y",
-    "landmark_{}",
-    "landmark_{}.1",
-    "landmark_{}.2"
+    "landmark_{}_z"
+    # deniz made changes due to sbr change format
+ #   "landmark_{}.1",
+ #   "landmark_{}.2"
 ]
 
 class Metrics:
@@ -171,13 +174,18 @@ class Metrics:
         for column in column_names:
             if column.format(0) in self._landmarks.columns:
                 self._dimension += 1
-        if self._dimension == 3:
-            self._landmarks = self._landmarks.drop(self._landmarks.index[
-                                                       0])  # this line drops the first row of the 3d landmakrs, it contains only x, y, z index | Diego 4/12/2020
-            self._rest_landmarks = self._rest_landmarks.drop(self._rest_landmarks.index[
-                                                                 0])  # this line drops the first row of the 3d landmakrs, it contains only x, y, z index | Diego 4/12/2020
 
-        self._column_names = column_names[:2] if self._dimension == 2 else column_names[2:]
+        # dENIZ CHANGED THE SAVING FORMAT FOR SBR and therefore the following lines are commented out
+        #if self._dimension == 3:
+        #    self._landmarks = self._landmarks.drop(self._landmarks.index[
+        #                                               0])  # this line drops the first row of the 3d landmakrs, it contains only x, y, z index | Diego 4/12/2020
+        #    self._rest_landmarks = self._rest_landmarks.drop(self._rest_landmarks.index[
+        #                                                         0])  # this line drops the first row of the 3d landmakrs, it contains only x, y, z index | Diego 4/12/2020
+
+        # DENIZ MAKE CHANGES DUE TO SBR CHANGE FORMAT
+        self._column_names = column_names[:2] if self._dimension == 2 else column_names
+        #self._column_names = column_names[:2] if self._dimension == 2 else column_names[2:]
+
         # if "Video_Frame_number" not in self._landmarks.columns:
         #     raise Exception(f"Video_Frame_number must be a column in your input data")
         if self._dimension not in [2, 3]:
@@ -723,6 +731,8 @@ class ClinicalMetrics(Metrics):
                        "LJ_MAX", "LJ_MIN", "LJ_AVG","LJ_RANGE" ,"LJ_PATH", "vLJ_MAX", "vLJ_MIN", "vLJ_AVG", "aLJ_MAX", "aLJ_MIN", "aLJ_AVG","jLJ_MAX", "jLJ_MIN", "jLJ_AVG",
                        "RC_MAX_2", "RC_MIN_2", "RC_AVG_2","RC_RANGE_2" ,"RC_PATH_2", "vRC_MAX_2", "vRC_MIN_2", "vRC_AVG_2", "aRC_MAX_2", "aRC_MIN_2", "aRC_AVG_2","jRC_MAX_2", "jRC_MIN_2", "jRC_AVG_2",
                        "LC_MAX_2", "LC_MIN_2", "LC_AVG_2","LC_RANGE_2" ,"LC_PATH_2", "vLC_MAX_2", "vLC_MIN_2", "vLC_AVG_2", "aLC_MAX_2", "aLC_MIN_2", "aLC_AVG_2","jLC_MAX_2", "jLC_MIN_2", "jLC_AVG_2",
+                       "RJ_MAX_2", "RJ_MIN_2", "RJ_AVG_2","RJ_RANGE_2" ,"RJ_PATH_2", "vRJ_MAX_2", "vRJ_MIN_2", "vRJ_AVG_2", "aRJ_MAX_2", "aRJ_MIN_2", "aRJ_AVG_2","jRJ_MAX_2", "jRJ_MIN_2", "jRJ_AVG_2",
+                       "LJ_MAX_2", "LJ_MIN_2", "LJ_AVG_2","LJ_RANGE_2" ,"LJ_PATH_2", "vLJ_MAX_2", "vLJ_MIN_2", "vLJ_AVG_2", "aLJ_MAX_2", "aLJ_MIN_2", "aLJ_AVG_2","jLJ_MAX_2", "jLJ_MIN_2", "jLJ_AVG_2",
                        "RCLC_diff", "RJLJ_diff","C_RCLC","P_RCLC","C_RALA","P_RALA","R_RALA","C_RJLJ","P_RJLJ","C_JRALA","P_JRALA","R_JRALA","e_AVG","e_RANGE",
                        "tA_Max","tA_MIN","tA_AVG","tA_RANGE","rA_Max","rA_MIN","rA_AVG","rA_RANGE","lA_Max","lA_MIN","lA_AVG","lA_RANGE","A_diff",
                        "tJA_Max","tJA_MIN","tJA_AVG","tJA_RANGE","rJA_Max","rJA_MIN","rJA_AVG","rJA_RANGE","lJA_Max","lJA_MIN","lJA_AVG","lJA_RANGE","JA_diff"
@@ -739,6 +749,8 @@ class ClinicalMetrics(Metrics):
         metrics.loc[0][["LC_MAX_2", "LC_MIN_2", "LC_AVG_2","LC_RANGE_2" ,"LC_PATH_2", "vLC_MAX_2", "vLC_MIN_2", "vLC_AVG_2", "aLC_MAX_2", "aLC_MIN_2", "aLC_AVG_2","jLC_MAX_2", "jLC_MIN_2", "jLC_AVG_2"]] = self.get_length_metrics(FeatureLandmarks.LCanthusMouthC)
         metrics.loc[0][["RJ_MAX", "RJ_MIN", "RJ_AVG","RJ_RANGE" ,"RJ_PATH", "vRJ_MAX", "vRJ_MIN", "vRJ_AVG", "aRJ_MAX", "aRJ_MIN", "aRJ_AVG","jRJ_MAX", "jRJ_MIN", "jRJ_AVG"]] = self.get_length_metrics(FeatureLandmarks.NoseJawR)
         metrics.loc[0][["LJ_MAX", "LJ_MIN", "LJ_AVG","LJ_RANGE" ,"LJ_PATH", "vLJ_MAX", "vLJ_MIN", "vLJ_AVG", "aLJ_MAX", "aLJ_MIN", "aLJ_AVG","jLJ_MAX", "jLJ_MIN", "jLJ_AVG"]] = self.get_length_metrics(FeatureLandmarks.NoseJawL)
+        metrics.loc[0][["RJ_MAX_2", "RJ_MIN_2", "RJ_AVG_2","RJ_RANGE_2" ,"RJ_PATH_2", "vRJ_MAX_2", "vRJ_MIN_2", "vRJ_AVG_2", "aRJ_MAX_2", "aRJ_MIN_2", "aRJ_AVG_2","jRJ_MAX_2", "jRJ_MIN_2", "jRJ_AVG_2"]] = self.get_length_metrics(FeatureLandmarks.RCanthusJaw)
+        metrics.loc[0][["LJ_MAX_2", "LJ_MIN_2", "LJ_AVG_2","LJ_RANGE_2" ,"LJ_PATH_2", "vLJ_MAX_2", "vLJ_MIN_2", "vLJ_AVG_2", "aLJ_MAX_2", "aLJ_MIN_2", "aLJ_AVG_2","jLJ_MAX_2", "jLJ_MIN_2", "jLJ_AVG_2"]] = self.get_length_metrics(FeatureLandmarks.LCanthusJaw)
 
         metrics.loc[0]["tA_Max","tA_MIN","tA_AVG","tA_RANGE","rA_Max","rA_MIN","rA_AVG","rA_RANGE","lA_Max","lA_MIN","lA_AVG","lA_RANGE","A_diff","C_RALA","P_RALA","R_RALA"] = self.get_area_metrics(FeatureLandmarks.MouthAreaLeft,FeatureLandmarks.MouthAreaRight)
         metrics.loc[0]["tJA_Max","tJA_MIN","tJA_AVG","tJA_RANGE","rJA_Max","rJA_MIN","rJA_AVG","rJA_RANGE","lJA_Max","lJA_MIN","lJA_AVG","lJA_RANGE","JA_diff","C_JRALA","P_JRALA","R_JRALA"] = self.get_area_metrics(FeatureLandmarks.JawAreaLeft,FeatureLandmarks.JawAreaRight)
