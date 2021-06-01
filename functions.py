@@ -281,7 +281,6 @@ def get_color_video(BAG_File):
                 color_data = np.asanyarray(aligned_color.as_frame().get_data(), dtype=np.int)
                 #depth_data = np.asanyarray(aligned_depth.as_frame().get_data(), dtype=np.int)
                 # adjust depth data in meters
-                #depth_data *= depth_scale
 
                 Color_Frames[-1] = color_data
 
